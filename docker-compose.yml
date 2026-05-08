@@ -1,0 +1,68 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai_qa_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - APP_NAME=AI-QA-Backend
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Use the redis container hostname inside the network
+      - REDIS_URL=redis://redis_cache:6379/0
+    volumes:
+      # Mount source code for hot reloading
+      - ./backend/app:/app/app
+      # Mount persistent volumes for FAISS and uploads
+      - backend_uploads:/tmp/uploads
+      - backend_vectorstore:/tmp/vectorstore
+    # Override CMD for development hot-reloading
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    networks:
+      - ai_network
+    depends_on:
+      - redis_cache
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Pass the backend URL through to the Vite build process
+        VITE_API_BASE_URL: http://localhost:8000/api/v1
+    container_name: ai_qa_frontend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    networks:
+      - ai_network
+    depends_on:
+      - backend
+
+  redis_cache:
+    image: redis:7-alpine
+    container_name: ai_qa_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - ai_network
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  backend_uploads:
+    name: ai_qa_uploads
+  backend_vectorstore:
+    name: ai_qa_vectorstore
+  redis_data:
+    name: ai_qa_redis_data
+
+networks:
+  ai_network:
+    name: ai_qa_network
+    driver: bridge

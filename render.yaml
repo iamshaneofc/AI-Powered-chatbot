@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: ai-qa-backend
+    env: docker
+    region: ohio
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ai-qa-redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: redis
+    name: ai-qa-redis
+    region: ohio
+    plan: free
+    ipAllowList: []

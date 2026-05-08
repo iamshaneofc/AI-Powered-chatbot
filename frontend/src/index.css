@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --animate-blob: blob 10s infinite;
+  --animate-fade-in-up: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-pulse-glow: pulseGlow 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  --animate-data-flow: dataFlow 20s linear infinite;
+
+  @keyframes blob {
+    0% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(40px, -60px) scale(1.15); }
+    66% { transform: translate(-30px, 30px) scale(0.9); }
+    100% { transform: translate(0px, 0px) scale(1); }
+  }
+
+  @keyframes fadeInUp {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 1; filter: brightness(1); }
+    50% { opacity: 0.7; filter: brightness(1.3); box-shadow: 0 0 30px rgba(99, 102, 241, 0.4); }
+  }
+
+  @keyframes dataFlow {
+    from { stroke-dashoffset: 100; }
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-[#030712] text-[#F8F9FA] antialiased selection:bg-indigo-500/30;
+    font-family: 'Inter', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight;
+    font-family: 'Outfit', sans-serif;
+  }
+}
+
+/* --- Premium Scrollbar --- */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors border-2 border-transparent;
+}
+
+/* --- Advanced Glassmorphism --- */
+.glass-panel {
+  @apply bg-[#0d111c]/60 backdrop-blur-2xl border border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)];
+}
+
+.glass-card {
+  @apply bg-white/[0.03] backdrop-blur-md border border-white/10 shadow-xl transition-all duration-500;
+}
+
+.glass-card:hover {
+  @apply bg-white/[0.05] border-white/20 shadow-indigo-500/10;
+}
+
+/* --- Chat Bubbles 2.0 --- */
+.chat-bubble-user {
+  @apply bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 text-white rounded-[1.5rem] rounded-tr-[0.3rem] shadow-xl shadow-indigo-500/20 border border-white/10;
+}
+
+.chat-bubble-ai {
+  @apply bg-[#151b23]/90 backdrop-blur-xl text-[#E5E7EB] rounded-[1.5rem] rounded-tl-[0.3rem] shadow-lg border border-white/5 leading-relaxed;
+}
+
+/* --- Gradients & Accents --- */
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 font-bold;
+}
+
+.neural-glow {
+  @apply relative;
+}
+.neural-glow::after {
+  content: '';
+  @apply absolute -inset-1 bg-indigo-500/20 blur-xl rounded-full opacity-0 transition-opacity duration-500;
+}
+.neural-glow:hover::after {
+  @apply opacity-100;
+}
+
+/* --- Interactive Utilities --- */
+.interactive-hover {
+  @apply transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 active:scale-[0.98];
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}

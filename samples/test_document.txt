@@ -1,0 +1,13 @@
+# Artificial Intelligence in Modern Software
+
+Artificial Intelligence (AI) has become a fundamental building block in modern software architecture. Unlike traditional software that relies strictly on hardcoded rules, AI systems use machine learning models trained on vast amounts of data to recognize patterns, make predictions, and generate novel content.
+
+## Vector Search and RAG
+One of the most powerful paradigms to emerge recently is Retrieval-Augmented Generation (RAG). RAG solves the problem of AI "hallucinations" by grounding the model's responses in factual, retrieved data.
+
+When a user asks a question, the system does not immediately send the question to the AI. Instead, it converts the question into a mathematical vector using an embedding model. It then searches a vector database (like FAISS or Pinecone) for documents with similar meaning.
+
+The top most relevant document chunks are retrieved and injected into the AI's context window. The AI is instructed: "Answer the user's question using ONLY the provided context."
+
+## Multimedia Processing
+Modern AI pipelines are not limited to text. Models like OpenAI's Whisper can accurately transcribe audio and video files into text, often outperforming human transcriptionists. By splitting these transcripts into chunks and embedding them, developers can create applications that allow users to semantic-search across hundreds of hours of video content instantly.

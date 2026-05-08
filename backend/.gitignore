@@ -1,0 +1,61 @@
+# ===========================================================================
+# .gitignore — Backend
+# ===========================================================================
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib64/
+pip-wheel-metadata/
+
+# ── Virtual environments ───────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Environment & secrets ─────────────────────────────────────────────────
+.env
+*.env
+!.env.example         # ← keep the example, ignore the real one
+
+# ── Uploads — never commit user data ─────────────────────────────────────
+app/uploads/*
+!app/uploads/.gitkeep
+
+# ── FAISS index ───────────────────────────────────────────────────────────
+app/vectorstore/*.index
+app/vectorstore/*.json
+
+# ── Whisper model cache ────────────────────────────────────────────────────
+~/.cache/whisper/
+
+# ── Testing & coverage ────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ── IDE ───────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
