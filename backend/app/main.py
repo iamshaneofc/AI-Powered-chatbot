@@ -12,10 +12,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import settings
-from app.routes import health, upload, query, transcribe, summarize, reset
+from app.routes import health, upload, query, transcribe, summarize, reset, settings as settings_route
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -66,6 +66,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Root redirect ─────────────────────────────────────────────────────
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return RedirectResponse(url="/docs")
+
     # ── Routers ───────────────────────────────────────────────────────────
     prefix = "/api/v1"
     app.include_router(health.router,     prefix=prefix, tags=["Health"])
@@ -74,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(transcribe.router, prefix=prefix, tags=["Transcribe"])
     app.include_router(summarize.router,  prefix=prefix, tags=["Summarize"])
     app.include_router(reset.router,      prefix=prefix, tags=["Reset"])
+    app.include_router(settings_route.router, prefix=f"{prefix}/settings", tags=["Settings"])
 
     # ── Global exception handlers ─────────────────────────────────────────
     from starlette.exceptions import HTTPException as StarletteHTTPException

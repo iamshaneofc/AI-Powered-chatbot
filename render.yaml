@@ -6,6 +6,7 @@ services:
     plan: free
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /api/v1/health
     envVars:
       - key: ENVIRONMENT
         value: production
@@ -15,6 +16,8 @@ services:
           name: ai-qa-redis
           property: connectionString
       - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENCODE_API_KEY
         sync: false
 
   - type: redis

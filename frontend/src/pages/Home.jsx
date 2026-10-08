@@ -3,13 +3,15 @@ import UploadForm from '../components/Upload/UploadForm';
 import ChatInterface from '../components/Chat/ChatInterface';
 import MediaPlayer from '../components/MediaPlayer/MediaPlayer';
 import SummaryView from '../components/Summary/SummaryView';
-import { Sparkles, Library, PlayCircle, FileText, Zap, RotateCcw, Cpu } from 'lucide-react';
+import SettingsModal from '../components/Settings/SettingsModal';
+import { Sparkles, Library, PlayCircle, FileText, Zap, RotateCcw, Cpu, Settings } from 'lucide-react';
 import { resetApp } from '../services/api';
 
 export default function Home() {
   const [activeMediaUrl, setActiveMediaUrl] = useState(null);
   const [seekTimestamp, setSeekTimestamp] = useState(null);
   const [lastUploadedFile, setLastUploadedFile] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const handleUploadSuccess = ({ file, type }) => {
     setLastUploadedFile(file.name);
@@ -59,7 +61,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Removed active nodes and right side icons for simplicity */}
+        {/* Settings Button */}
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-gray-300 hover:text-white transition-all group"
+        >
+          <Settings size={16} className="group-hover:rotate-90 transition-transform duration-500" />
+          <span className="text-xs font-medium">Settings</span>
+        </button>
       </nav>
 
       {/* 2. Main Content Wrapper */}
@@ -147,6 +156,12 @@ export default function Home() {
           </div>
         </main>
       </div>
+
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+      />
     </div>
   );
 }

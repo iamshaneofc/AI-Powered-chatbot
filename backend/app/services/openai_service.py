@@ -1,11 +1,12 @@
 """
-services/openai_service.py — OpenAI API wrapper.
+services/openai_service.py — Multi-provider AI API wrapper.
 
 Responsibilities:
-  - Chat completions (GPT-4o / GPT-3.5)
-  - Text embeddings (text-embedding-3-small)
+  - Chat completions (supports multiple providers)
+  - Text embeddings (provider-specific)
   - Async-first: uses openai.AsyncOpenAI
   - Centralised retry / error handling
+  - Dynamic provider switching based on settings
 
 Usage:
     from app.services.openai_service import openai_service
@@ -13,7 +14,7 @@ Usage:
     vector  = await openai_service.embed("Some text to embed")
 """
 
-from typing import Any
+from typing import Any, Optional
 
 from openai import AsyncOpenAI, APIError, RateLimitError, APIConnectionError
 
@@ -24,18 +25,42 @@ logger = get_logger(__name__)
 
 
 class OpenAIService:
-    """Thin async wrapper around the OpenAI Python SDK."""
+    """Thin async wrapper around the OpenAI Python SDK with multi-provider support."""
 
     def __init__(self) -> None:
         self._client: AsyncOpenAI | None = None
+        self._current_provider: str | None = None
 
     @property
     def client(self) -> AsyncOpenAI:
-        if self._client is None:
-            if not settings.OPENAI_API_KEY:
-                raise RuntimeError("OPENAI_API_KEY is not set in environment variables.")
-            self._client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        """Get or create the OpenAI client for the current provider."""
+        current_provider = settings.AI_PROVIDER.lower()
+        
+        # Recreate client if provider changed
+        if self._client is None or self._current_provider != current_provider:
+            api_key = settings.get_active_api_key()
+            base_url = settings.get_active_base_url()
+            
+            if not api_key:
+                raise RuntimeError(
+                    f"API key is not set for provider '{current_provider}'. "
+                    f"Please configure it in Settings."
+                )
+            
+            self._client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+            )
+            self._current_provider = current_provider
+            logger.info("Initialized client for provider: %s", current_provider)
+        
         return self._client
+
+    def _get_model(self, model: str | None = None) -> str:
+        """Get the model to use, either provided or from settings."""
+        if model:
+            return model
+        return settings.get_active_model()
 
     # ── Chat completion ───────────────────────────────────────────────────
     async def chat(
@@ -57,7 +82,7 @@ class OpenAIService:
         Returns:
             The assistant's reply as a plain string.
         """
-        model = model or settings.OPENAI_MODEL
+        model = self._get_model(model)
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt}
@@ -87,14 +112,14 @@ class OpenAIService:
             return answer.strip()
 
         except RateLimitError as exc:
-            logger.error("OpenAI rate limit hit: %s", exc)
-            raise RuntimeError("OpenAI rate limit exceeded. Please retry later.") from exc
+            logger.error("Rate limit hit for provider %s: %s", settings.AI_PROVIDER, exc)
+            raise RuntimeError(f"Rate limit exceeded for {settings.AI_PROVIDER}. Please retry later.") from exc
         except APIConnectionError as exc:
-            logger.error("OpenAI connection error: %s", exc)
-            raise RuntimeError("Cannot connect to OpenAI API.") from exc
+            logger.error("Connection error for provider %s: %s", settings.AI_PROVIDER, exc)
+            raise RuntimeError(f"Cannot connect to {settings.AI_PROVIDER} API.") from exc
         except APIError as exc:
-            logger.error("OpenAI API error: %s", exc)
-            raise RuntimeError(f"OpenAI API error: {exc}") from exc
+            logger.error("API error for provider %s: %s", settings.AI_PROVIDER, exc)
+            raise RuntimeError(f"{settings.AI_PROVIDER} API error: {exc}") from exc
 
     # ── Embeddings ────────────────────────────────────────────────────────
     async def embed(self, text: str, model: str | None = None) -> list[float]:
@@ -108,14 +133,23 @@ class OpenAIService:
         Returns:
             A list of floats representing the embedding vector.
         """
-        model = model or settings.OPENAI_EMBEDDING_MODEL
+        # Get embedding model from provider config
+        from app.config.providers import get_provider
+        try:
+            provider = get_provider(settings.AI_PROVIDER.lower())
+            embedding_model = provider.embedding_model
+        except ValueError:
+            embedding_model = settings.OPENAI_EMBEDDING_MODEL
+        
+        if model:
+            embedding_model = model
 
-        # OpenAI recommends replacing newlines for best performance
+        # Clean text for better embeddings
         clean_text = text.replace("\n", " ").strip()
 
         try:
             response = await self.client.embeddings.create(
-                model=model,
+                model=embedding_model,
                 input=clean_text,
             )
             vector = response.data[0].embedding
@@ -123,15 +157,25 @@ class OpenAIService:
             return vector
 
         except APIError as exc:
-            logger.error("Embedding error: %s", exc)
+            logger.error("Embedding error for provider %s: %s", settings.AI_PROVIDER, exc)
             raise RuntimeError(f"Failed to generate embedding: {exc}") from exc
 
     async def embed_batch(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         """Embed multiple texts in a single API call (more efficient)."""
-        model = model or settings.OPENAI_EMBEDDING_MODEL
+        # Get embedding model from provider config
+        from app.config.providers import get_provider
+        try:
+            provider = get_provider(settings.AI_PROVIDER.lower())
+            embedding_model = provider.embedding_model
+        except ValueError:
+            embedding_model = settings.OPENAI_EMBEDDING_MODEL
+        
+        if model:
+            embedding_model = model
+
         cleaned = [t.replace("\n", " ").strip() for t in texts]
 
-        response = await self.client.embeddings.create(model=model, input=cleaned)
+        response = await self.client.embeddings.create(model=embedding_model, input=cleaned)
         return [item.embedding for item in response.data]
 
 

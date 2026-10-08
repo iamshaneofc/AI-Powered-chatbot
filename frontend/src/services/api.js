@@ -68,4 +68,34 @@ export const resetApp = async () => {
   return response.data;
 };
 
+// Settings API
+export const getProviders = async () => {
+  const response = await api.get('/settings/providers');
+  return response.data;
+};
+
+export const getCurrentSettings = async () => {
+  const response = await api.get('/settings/current');
+  return response.data;
+};
+
+export const updateSettings = async (settings) => {
+  const response = await api.put('/settings/update', settings);
+  return response.data;
+};
+
+export const testProvider = async (provider, apiKey, baseUrl) => {
+  const response = await api.post('/settings/test', {
+    provider,
+    api_key: apiKey,
+    base_url: baseUrl,
+  });
+  return response.data;
+};
+
+export const getProviderModels = async (providerId) => {
+  const response = await api.get(`/settings/models/${providerId}`);
+  return response.data;
+};
+
 export default api;
