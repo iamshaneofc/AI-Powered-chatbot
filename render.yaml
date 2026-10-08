@@ -10,12 +10,16 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: AI_PROVIDER
+        value: openrouter
       - key: REDIS_URL
         fromService:
           type: redis
           name: ai-qa-redis
           property: connectionString
       - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENCODE_API_KEY
         sync: false

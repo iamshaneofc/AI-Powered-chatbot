@@ -85,7 +85,7 @@ class RAGService:
             return {
                 "answer": "Hello! I'm Novara AI. I specialize in analyzing and answering questions about your uploaded documents and media. Feel free to upload a file to get started, or ask me about something you've already uploaded!",
                 "sources": [],
-                "model": settings.OPENAI_MODEL,
+                "model": settings.get_active_model(),
                 "chunks": [],
             }
 
@@ -110,7 +110,7 @@ class RAGService:
             return {
                 "answer": "I don't have any uploaded documents that match your request right now. I specialize in analyzing the files you provide—please upload some documents or media, and I'd be happy to help!",
                 "sources": [],
-                "model": settings.OPENAI_MODEL,
+                "model": settings.get_active_model(),
                 "chunks": [],
             }
 
@@ -145,7 +145,7 @@ class RAGService:
         return {
             "answer":  answer,
             "sources": sources,
-            "model":   settings.OPENAI_MODEL,
+            "model":   settings.get_active_model(),
             "chunks":  chunks,
         }
 
@@ -166,8 +166,9 @@ class RAGService:
         # Re-use existing FAISS index via LangChain wrapper
         lc_faiss = LangFAISS(
             embedding_function=OpenAIEmbeddings(
-                model=settings.OPENAI_EMBEDDING_MODEL,
-                openai_api_key=settings.OPENAI_API_KEY,
+                model=settings.get_active_embedding_model(),
+                openai_api_key=settings.get_active_api_key(),
+                base_url=settings.get_active_base_url(),
             ),
             index=faiss_store.index,
             docstore=faiss_store.docstore,
@@ -185,9 +186,10 @@ class RAGService:
         )
 
         llm = ChatOpenAI(
-            model=settings.OPENAI_MODEL,
+            model=settings.get_active_model(),
             temperature=settings.OPENAI_TEMPERATURE,
-            openai_api_key=settings.OPENAI_API_KEY,
+            openai_api_key=settings.get_active_api_key(),
+            base_url=settings.get_active_base_url(),
         )
 
         chain = RetrievalQA.from_chain_type(
@@ -203,7 +205,7 @@ class RAGService:
         return {
             "answer":  result["result"],
             "sources": sources,
-            "model":   settings.OPENAI_MODEL,
+            "model":   settings.get_active_model(),
             "chunks":  [],
         }
 

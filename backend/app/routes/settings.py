@@ -63,79 +63,81 @@ async def get_current_settings():
 
 @router.put("/update")
 async def update_settings(request: ProviderUpdateRequest):
-    """Update provider settings and save to .env file."""
+    """Update provider settings — mutates in-memory settings and persists to .env."""
     try:
-        # Validate provider
         provider = get_provider(request.provider)
-        
-        # Read current .env file
-        env_path = ".env"
-        env_lines = []
-        
-        try:
-            with open(env_path, "r") as f:
-                env_lines = f.readlines()
-        except FileNotFoundError:
-            env_lines = []
-        
-        # Update or add settings
-        updates = {
-            "AI_PROVIDER": request.provider,
-        }
-        
-        # Provider-specific API key
+
+        # ── Mutate the in-memory settings singleton ──────────────────────
+        # This is what actually takes effect — .env write is best-effort.
+        settings.AI_PROVIDER = request.provider
+
         if request.api_key is not None:
-            api_key_env = provider.api_key_env
-            updates[api_key_env] = request.api_key
-        
-        # Provider-specific model
+            setattr(settings, provider.api_key_env, request.api_key)
+
         if request.model is not None:
-            model_env = f"{request.provider.upper()}_MODEL"
-            updates[model_env] = request.model
-            # Also update OPENAI_MODEL for compatibility
+            model_attr = f"{request.provider.upper()}_MODEL"
+            if hasattr(settings, model_attr):
+                setattr(settings, model_attr, request.model)
             if request.provider == "openai":
-                updates["OPENAI_MODEL"] = request.model
-        
-        # Custom base URL
-        if request.base_url is not None and request.provider == "custom":
-            updates["CUSTOM_BASE_URL"] = request.base_url
-        
-        # Global settings
+                settings.OPENAI_MODEL = request.model
+
+        if request.base_url is not None and request.provider in ("custom", "opencode"):
+            base_url_attr = f"{request.provider.upper()}_BASE_URL"
+            if hasattr(settings, base_url_attr):
+                setattr(settings, base_url_attr, request.base_url)
+
         if request.max_tokens is not None:
-            updates["OPENAI_MAX_TOKENS"] = str(request.max_tokens)
-        
+            settings.OPENAI_MAX_TOKENS = request.max_tokens
+
         if request.temperature is not None:
-            updates["OPENAI_TEMPERATURE"] = str(request.temperature)
-        
-        # Update env lines
-        for key, value in updates.items():
-            updated = False
-            for i, line in enumerate(env_lines):
-                if line.strip().startswith(f"{key}="):
-                    env_lines[i] = f"{key}={value}\n"
-                    updated = True
-                    break
-            
-            if not updated:
-                env_lines.append(f"{key}={value}\n")
-        
-        # Write back to .env file
-        with open(env_path, "w") as f:
-            f.writelines(env_lines)
-        
-        # Clear settings cache to reload
-        from app.config.main import get_settings
-        get_settings.cache_clear()
-        
+            settings.OPENAI_TEMPERATURE = request.temperature
+
+        # ── Best-effort .env persistence (may fail on read-only filesystems) ──
+        try:
+            env_path = ".env"
+            env_lines = []
+            try:
+                with open(env_path, "r") as f:
+                    env_lines = f.readlines()
+            except FileNotFoundError:
+                env_lines = []
+
+            updates = {"AI_PROVIDER": request.provider}
+            if request.api_key is not None:
+                updates[provider.api_key_env] = request.api_key
+            if request.model is not None:
+                updates[f"{request.provider.upper()}_MODEL"] = request.model
+            if request.base_url is not None and request.provider in ("custom", "opencode"):
+                updates[f"{request.provider.upper()}_BASE_URL"] = request.base_url
+            if request.max_tokens is not None:
+                updates["OPENAI_MAX_TOKENS"] = str(request.max_tokens)
+            if request.temperature is not None:
+                updates["OPENAI_TEMPERATURE"] = str(request.temperature)
+
+            for key, value in updates.items():
+                found = False
+                for i, line in enumerate(env_lines):
+                    if line.strip().startswith(f"{key}="):
+                        env_lines[i] = f"{key}={value}\n"
+                        found = True
+                        break
+                if not found:
+                    env_lines.append(f"{key}={value}\n")
+
+            with open(env_path, "w") as f:
+                f.writelines(env_lines)
+        except Exception as env_err:
+            logger.warning("Could not persist to .env (read-only fs?): %s", env_err)
+
         logger.info("Settings updated: provider=%s, model=%s", request.provider, request.model)
-        
+
         return {
             "success": True,
             "message": f"Settings updated to use {provider.name}",
             "provider": request.provider,
             "model": request.model or provider.default_model,
         }
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
