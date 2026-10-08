@@ -46,7 +46,18 @@ async def list_providers():
 
 @router.get("/current")
 async def get_current_settings():
-    """Get current provider settings."""
+    """Get current provider settings (synced from Redis across all workers)."""
+    # Sync from Redis so all workers report the same state
+    try:
+        from app.services.redis_service import redis_service
+        saved = await redis_service.load_settings()
+        if saved:
+            for key, value in saved.items():
+                if hasattr(settings, key):
+                    setattr(settings, key, value)
+    except Exception:
+        pass
+
     provider = get_provider(settings.AI_PROVIDER)
     
     return {

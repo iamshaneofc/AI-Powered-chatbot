@@ -30,30 +30,48 @@ class OpenAIService:
     def __init__(self) -> None:
         self._client: AsyncOpenAI | None = None
         self._current_provider: str | None = None
+        self._current_key: str | None = None
 
-    @property
-    def client(self) -> AsyncOpenAI:
-        """Get or create the OpenAI client for the current provider."""
+    async def _ensure_client(self) -> AsyncOpenAI:
+        """
+        Sync settings from Redis (if available) then create/update the client.
+        This ensures every worker process sees the latest saved settings,
+        even when running with multiple uvicorn workers.
+        """
+        # Sync from Redis so all workers share the same settings
+        try:
+            from app.services.redis_service import redis_service
+            saved = await redis_service.load_settings()
+            if saved:
+                for key, value in saved.items():
+                    if hasattr(settings, key):
+                        setattr(settings, key, value)
+        except Exception:
+            pass  # Redis unavailable — fall back to in-memory settings
+
         current_provider = settings.AI_PROVIDER.lower()
-        
-        # Recreate client if provider changed
-        if self._client is None or self._current_provider != current_provider:
-            api_key = settings.get_active_api_key()
-            base_url = settings.get_active_base_url()
-            
-            if not api_key:
+        current_key = settings.get_active_api_key()
+
+        # Recreate client if provider OR key changed
+        if (
+            self._client is None
+            or self._current_provider != current_provider
+            or self._current_key != current_key
+        ):
+            if not current_key:
                 raise RuntimeError(
                     f"API key is not set for provider '{current_provider}'. "
                     f"Please configure it in Settings."
                 )
-            
+
             self._client = AsyncOpenAI(
-                api_key=api_key,
-                base_url=base_url,
+                api_key=current_key,
+                base_url=settings.get_active_base_url(),
             )
             self._current_provider = current_provider
+            self._current_key = current_key
             logger.info("Initialized client for provider: %s", current_provider)
-        
+
         return self._client
 
     def _get_model(self, model: str | None = None) -> str:
@@ -101,7 +119,8 @@ class OpenAIService:
             messages.append({"role": "user", "content": user_message})
 
         try:
-            response = await self.client.chat.completions.create(
+            client = await self._ensure_client()
+            response = await client.chat.completions.create(
                 model=model,
                 messages=messages,
                 max_tokens=settings.OPENAI_MAX_TOKENS,
@@ -148,7 +167,8 @@ class OpenAIService:
         clean_text = text.replace("\n", " ").strip()
 
         try:
-            response = await self.client.embeddings.create(
+            client = await self._ensure_client()
+            response = await client.embeddings.create(
                 model=embedding_model,
                 input=clean_text,
             )
@@ -175,7 +195,8 @@ class OpenAIService:
 
         cleaned = [t.replace("\n", " ").strip() for t in texts]
 
-        response = await self.client.embeddings.create(model=embedding_model, input=cleaned)
+        client = await self._ensure_client()
+        response = await client.embeddings.create(model=embedding_model, input=cleaned)
         return [item.embedding for item in response.data]
 
 
