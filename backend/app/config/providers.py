@@ -116,6 +116,16 @@ PROVIDERS: Dict[str, ProviderConfig] = {
         embedding_model="text-embedding-004",
         free_tier_info="1500 req/day free, no credit card required"
     ),
+    "mimo": ProviderConfig(
+        id="mimo",
+        name="MiMo Free",
+        base_url="https://api.xiaomimimo.com/v1",
+        api_key_env="MIMO_API_KEY",
+        models=["mimo-v2.6-flash-free", "mimo-v2.6-pro", "mimo-v2.5-pro", "mimo-v2.5"],
+        default_model="mimo-v2.6-flash-free",
+        embedding_model="mimo-v2.6-flash-free",
+        free_tier_info="Xiaomi MiMo — free tier available"
+    ),
     "opencode": ProviderConfig(
         id="opencode",
         name="OpenCode",

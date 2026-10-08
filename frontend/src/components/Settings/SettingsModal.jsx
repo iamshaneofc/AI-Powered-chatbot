@@ -39,6 +39,12 @@ const PROVIDER_INFO = {
     color: 'from-blue-400 to-cyan-500',
     free: true,
   },
+  mimo: {
+    name: 'MiMo Free',
+    description: 'Xiaomi MiMo — free tier available',
+    color: 'from-orange-400 to-amber-500',
+    free: true,
+  },
   opencode: {
     name: 'OpenCode',
     description: 'Self-hosted OpenCode-compatible endpoint',

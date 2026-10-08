@@ -37,6 +37,18 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("⚠️  FAISS store not loaded (will be created on first upload): %s", exc)
 
+    # ── Restore persisted settings from Redis ────────────────────────────
+    try:
+        from app.services.redis_service import redis_service
+        saved = await redis_service.load_settings()
+        if saved:
+            for key, value in saved.items():
+                if hasattr(settings, key):
+                    setattr(settings, key, value)
+            logger.info("✅  Restored settings from Redis: provider=%s", settings.AI_PROVIDER)
+    except Exception as exc:
+        logger.warning("⚠️  Could not restore settings from Redis: %s", exc)
+
     yield  # ← application runs here
 
     logger.info("🛑  Shutting down — releasing resources")

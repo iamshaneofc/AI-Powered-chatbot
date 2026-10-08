@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # ── AI Provider Settings ──────────────────────────────────────────────
-    # Provider selection: openai | openrouter | nvidia | groq | cerebras | gemini | opencode | custom
+    # Provider selection: openai | openrouter | nvidia | groq | cerebras | gemini | mimo | opencode | custom
     AI_PROVIDER: str = "openai"
     
     # OpenAI Settings
@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     CEREBRAS_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    MIMO_API_KEY: str = ""
     OPENCODE_API_KEY: str = ""
     CUSTOM_API_KEY: str = ""
     
@@ -64,6 +65,7 @@ class Settings(BaseSettings):
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     CEREBRAS_BASE_URL: str = "https://api.cerebras.ai/v1"
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    MIMO_BASE_URL: str = "https://api.xiaomimimo.com/v1"
     OPENCODE_BASE_URL: str = ""
     CUSTOM_BASE_URL: str = ""
     
@@ -73,6 +75,7 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     CEREBRAS_MODEL: str = "llama-3.3-70b"
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    MIMO_MODEL: str = "mimo-v2.6-flash-free"
     OPENCODE_MODEL: str = ""
     CUSTOM_MODEL: str = ""
 
@@ -118,6 +121,8 @@ class Settings(BaseSettings):
             return self.CEREBRAS_API_KEY
         elif provider == "gemini":
             return self.GEMINI_API_KEY
+        elif provider == "mimo":
+            return self.MIMO_API_KEY
         elif provider == "opencode":
             return self.OPENCODE_API_KEY
         elif provider == "custom":
@@ -139,6 +144,8 @@ class Settings(BaseSettings):
             return self.CEREBRAS_BASE_URL
         elif provider == "gemini":
             return self.GEMINI_BASE_URL
+        elif provider == "mimo":
+            return self.MIMO_BASE_URL
         elif provider == "opencode":
             return self.OPENCODE_BASE_URL
         elif provider == "custom":
@@ -160,6 +167,8 @@ class Settings(BaseSettings):
             return self.CEREBRAS_MODEL
         elif provider == "gemini":
             return self.GEMINI_MODEL
+        elif provider == "mimo":
+            return self.MIMO_MODEL
         elif provider == "opencode":
             return self.OPENCODE_MODEL
         elif provider == "custom":

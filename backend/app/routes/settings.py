@@ -63,12 +63,11 @@ async def get_current_settings():
 
 @router.put("/update")
 async def update_settings(request: ProviderUpdateRequest):
-    """Update provider settings — mutates in-memory settings and persists to .env."""
+    """Update provider settings — mutates in-memory settings and persists to Redis."""
     try:
         provider = get_provider(request.provider)
 
         # ── Mutate the in-memory settings singleton ──────────────────────
-        # This is what actually takes effect — .env write is best-effort.
         settings.AI_PROVIDER = request.provider
 
         if request.api_key is not None:
@@ -92,42 +91,32 @@ async def update_settings(request: ProviderUpdateRequest):
         if request.temperature is not None:
             settings.OPENAI_TEMPERATURE = request.temperature
 
-        # ── Best-effort .env persistence (may fail on read-only filesystems) ──
-        try:
-            env_path = ".env"
-            env_lines = []
-            try:
-                with open(env_path, "r") as f:
-                    env_lines = f.readlines()
-            except FileNotFoundError:
-                env_lines = []
-
-            updates = {"AI_PROVIDER": request.provider}
-            if request.api_key is not None:
-                updates[provider.api_key_env] = request.api_key
-            if request.model is not None:
-                updates[f"{request.provider.upper()}_MODEL"] = request.model
-            if request.base_url is not None and request.provider in ("custom", "opencode"):
-                updates[f"{request.provider.upper()}_BASE_URL"] = request.base_url
-            if request.max_tokens is not None:
-                updates["OPENAI_MAX_TOKENS"] = str(request.max_tokens)
-            if request.temperature is not None:
-                updates["OPENAI_TEMPERATURE"] = str(request.temperature)
-
-            for key, value in updates.items():
-                found = False
-                for i, line in enumerate(env_lines):
-                    if line.strip().startswith(f"{key}="):
-                        env_lines[i] = f"{key}={value}\n"
-                        found = True
-                        break
-                if not found:
-                    env_lines.append(f"{key}={value}\n")
-
-            with open(env_path, "w") as f:
-                f.writelines(env_lines)
-        except Exception as env_err:
-            logger.warning("Could not persist to .env (read-only fs?): %s", env_err)
+        # ── Persist to Redis (survives restarts) ──────────────────────────
+        from app.services.redis_service import redis_service
+        await redis_service.save_settings({
+            "AI_PROVIDER": settings.AI_PROVIDER,
+            "OPENAI_API_KEY": settings.OPENAI_API_KEY,
+            "OPENROUTER_API_KEY": settings.OPENROUTER_API_KEY,
+            "NVIDIA_API_KEY": settings.NVIDIA_API_KEY,
+            "GROQ_API_KEY": settings.GROQ_API_KEY,
+            "CEREBRAS_API_KEY": settings.CEREBRAS_API_KEY,
+            "GEMINI_API_KEY": settings.GEMINI_API_KEY,
+            "MIMO_API_KEY": settings.MIMO_API_KEY,
+            "OPENCODE_API_KEY": settings.OPENCODE_API_KEY,
+            "CUSTOM_API_KEY": settings.CUSTOM_API_KEY,
+            "OPENROUTER_MODEL": settings.OPENROUTER_MODEL,
+            "NVIDIA_MODEL": settings.NVIDIA_MODEL,
+            "GROQ_MODEL": settings.GROQ_MODEL,
+            "CEREBRAS_MODEL": settings.CEREBRAS_MODEL,
+            "GEMINI_MODEL": settings.GEMINI_MODEL,
+            "MIMO_MODEL": settings.MIMO_MODEL,
+            "OPENCODE_MODEL": settings.OPENCODE_MODEL,
+            "CUSTOM_MODEL": settings.CUSTOM_MODEL,
+            "CUSTOM_BASE_URL": settings.CUSTOM_BASE_URL,
+            "OPENCODE_BASE_URL": settings.OPENCODE_BASE_URL,
+            "OPENAI_MAX_TOKENS": settings.OPENAI_MAX_TOKENS,
+            "OPENAI_TEMPERATURE": settings.OPENAI_TEMPERATURE,
+        })
 
         logger.info("Settings updated: provider=%s, model=%s", request.provider, request.model)
 

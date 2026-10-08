@@ -109,5 +109,29 @@ class RedisService:
             return None
 
 
+    # ── Settings Persistence ──────────────────────────────────────────────
+
+    async def save_settings(self, data: dict) -> None:
+        """Persist provider settings to Redis so they survive restarts."""
+        if not self.client:
+            return
+        try:
+            await self.client.set("app:settings", json.dumps(data))
+            logger.info("Settings persisted to Redis")
+        except Exception as e:
+            logger.warning("Failed to persist settings to Redis: %s", e)
+
+    async def load_settings(self) -> Optional[dict]:
+        """Load persisted provider settings from Redis."""
+        if not self.client:
+            return None
+        try:
+            val = await self.client.get("app:settings")
+            return json.loads(val) if val else None
+        except Exception as e:
+            logger.warning("Failed to load settings from Redis: %s", e)
+            return None
+
+
 # Singleton instance
 redis_service = RedisService()
