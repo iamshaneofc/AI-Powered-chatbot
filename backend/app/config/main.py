@@ -112,7 +112,7 @@ class Settings(BaseSettings):
         if provider == "openai":
             return self.OPENAI_API_KEY
         elif provider == "openrouter":
-            return self.OPENROUTER_API_KEY
+            return self.OPENROUTER_API_KEY or (self.OPENAI_API_KEY if self.OPENAI_API_KEY.startswith("sk-or-") else self.OPENAI_API_KEY)
         elif provider == "nvidia":
             return self.NVIDIA_API_KEY
         elif provider == "groq":

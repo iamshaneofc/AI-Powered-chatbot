@@ -83,26 +83,25 @@ async def upload_pdf(
     Accept a PDF file, extract text, chunk it, generate embeddings,
     and store them in FAISS, all synchronously in the request flow.
     """
-    if _ext(file.filename) != "pdf":
+    if _ext(file.filename) not in DOCUMENT_EXTS:
         raise HTTPException(
             status_code=400,
-            detail=f"Expected a PDF file, got '{file.filename}'.",
+            detail=f"Expected a document file ({DOCUMENT_EXTS}), got '{file.filename}'.",
         )
 
     try:
         # 0. Reset state so AI only focuses on the new file
         await _reset_state_before_upload()
 
-        # 1. Save uploaded PDF in uploads/
+        # 1. Save uploaded file in uploads/
         validate_file(file)
         saved_path = await save_upload(file)
 
-        # 2. Extract text using PDF service
-        from app.services.pdf_service import pdf_service
-        text = pdf_service.extract_text(saved_path)
+        # 2. Extract text using file extractor
+        text = extract_text(saved_path)
 
         if not text.strip():
-            raise HTTPException(status_code=400, detail="No text could be extracted from the PDF.")
+            raise HTTPException(status_code=400, detail="No text could be extracted from the document.")
 
         # 3. Implement text chunking utility
         from app.utils.text_chunker import chunk_text

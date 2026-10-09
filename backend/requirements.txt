@@ -14,9 +14,10 @@ python-dotenv==1.0.1
 redis[hiredis]==5.0.8           # Redis client with async support
 
 # ===========================================================================
-# OpenAI (LLM + Embeddings)
+# OpenAI & Whisper
 # ===========================================================================
 openai                  # Async client — chat completions + embeddings
+faster-whisper          # Fast local speech recognition
 
 
 

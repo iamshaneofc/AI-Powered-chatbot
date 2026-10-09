@@ -30,22 +30,14 @@ api.interceptors.response.use(
 export const uploadDocument = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await api.post('/upload/pdf', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const response = await api.post('/upload/pdf', formData);
   return response.data;
 };
 
 export const uploadMedia = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await api.post('/upload/media', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const response = await api.post('/upload/media', formData);
   return response.data;
 };
 
