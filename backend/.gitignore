@@ -41,6 +41,9 @@ app/uploads/*
 app/vectorstore/*.index
 app/vectorstore/*.json
 
+# ── Default runtime storage (uploads + FAISS index) ───────────────────────
+data/
+
 # ── Whisper model cache ────────────────────────────────────────────────────
 ~/.cache/whisper/
 

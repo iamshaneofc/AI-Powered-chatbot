@@ -105,6 +105,8 @@ def create_app() -> FastAPI:
             content={
                 "error": True,
                 "message": exc.detail,
+                # `detail` kept for FastAPI-style clients/tests
+                "detail": exc.detail,
                 "path": request.url.path,
                 "status_code": exc.status_code
             },
@@ -118,6 +120,7 @@ def create_app() -> FastAPI:
             content={
                 "error": True,
                 "message": "Invalid request payload.",
+                "detail": exc.errors(),
                 "details": exc.errors(),
                 "path": request.url.path
             },

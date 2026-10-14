@@ -89,10 +89,11 @@ class WhisperService:
         if not use_local:
             try:
                 from app.services.openai_service import openai_service
+                client = await openai_service.get_client()
                 file_size_mb = file_path.stat().st_size / (1024 * 1024)
                 if file_size_mb <= 25:
                     with open(file_path, "rb") as audio_file:
-                        response = await openai_service.client.audio.transcriptions.create(
+                        response = await client.audio.transcriptions.create(
                             model="whisper-1",
                             file=audio_file,
                             response_format="verbose_json",

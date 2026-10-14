@@ -12,6 +12,9 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Use the redis container hostname inside the network
       - REDIS_URL=redis://redis_cache:6379/0
+      # Keep storage inside the mounted volumes below
+      - FAISS_INDEX_PATH=/tmp/vectorstore/index
+      - UPLOAD_DIR=/tmp/uploads
     volumes:
       # Mount source code for hot reloading
       - ./backend/app:/app/app

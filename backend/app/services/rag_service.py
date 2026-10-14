@@ -43,6 +43,23 @@ class RAGService:
     swap the retriever or LLM backend later.
     """
 
+    @staticmethod
+    def _knowledge_state() -> tuple[bool, list[str]]:
+        """
+        Snapshot of what is actually indexed right now.
+
+        Returns (index_ready, source_filenames). Safe to call even when the
+        vector store was never initialised.
+        """
+        try:
+            from app.vectorstore.faiss_store import faiss_store
+            if not faiss_store.is_ready():
+                return False, []
+            return True, faiss_store.sources
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Could not inspect vector store: %s", exc)
+            return False, []
+
     async def answer(
         self, 
         question: str, 
@@ -82,8 +99,24 @@ class RAGService:
         clean_q = question.lower().strip().strip('?!.,')
         
         if clean_q in casual_greetings:
+            ready, sources = self._knowledge_state()
+            if ready:
+                listed = ", ".join(sources[:3])
+                extra = "" if len(sources) <= 3 else f" and {len(sources) - 3} more"
+                answer = (
+                    f"Hello! I'm Novara AI. I already have {len(sources)} document"
+                    f"{'s' if len(sources) != 1 else ''} indexed ({listed}{extra}) — "
+                    "ask me anything about them, or upload a new file and I'll switch to analyzing that."
+                )
+            else:
+                answer = (
+                    "Hello! I'm Novara AI. I specialize in analyzing and answering "
+                    "questions about your uploaded documents and media. Feel free to "
+                    "upload a file to get started, or ask me about something you've "
+                    "already uploaded!"
+                )
             return {
-                "answer": "Hello! I'm Novara AI. I specialize in analyzing and answering questions about your uploaded documents and media. Feel free to upload a file to get started, or ask me about something you've already uploaded!",
+                "answer": answer,
                 "sources": [],
                 "model": settings.get_active_model(),
                 "chunks": [],
@@ -106,9 +139,30 @@ class RAGService:
         chunks = await vector_service.search(question, top_k=top_k, filename_filter=filename_filter)
 
         if not chunks:
-            logger.warning("No chunks retrieved for question: %s", question[:80])
+            ready, sources = self._knowledge_state()
+            if ready:
+                listed = ", ".join(sources[:3])
+                extra = "" if len(sources) <= 3 else f" and {len(sources) - 3} more"
+                answer = (
+                    f"I couldn't find anything relevant to that in the document"
+                    f"{'s' if len(sources) != 1 else ''} I have indexed ({listed}{extra}). "
+                    "Could you rephrase the question, or upload a different file?"
+                )
+                logger.warning(
+                    "No chunks matched question: %s… (index ready, sources=%s)",
+                    question[:60], sources,
+                )
+            else:
+                answer = (
+                    "I don't have any documents indexed yet — upload a PDF, TXT, DOCX "
+                    "or an audio/video file and I'll analyze it right away."
+                )
+                logger.warning(
+                    "No chunks retrieved for question: %s… (knowledge base is empty)",
+                    question[:60],
+                )
             return {
-                "answer": "I don't have any uploaded documents that match your request right now. I specialize in analyzing the files you provide—please upload some documents or media, and I'd be happy to help!",
+                "answer": answer,
                 "sources": [],
                 "model": settings.get_active_model(),
                 "chunks": [],

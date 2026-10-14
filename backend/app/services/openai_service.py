@@ -80,6 +80,15 @@ class OpenAIService:
             return model
         return settings.get_active_model()
 
+    async def get_client(self) -> AsyncOpenAI:
+        """
+        Public accessor for the underlying SDK client.
+
+        Syncs provider/key settings first, so callers outside this class
+        (e.g. the Whisper service) always get a correctly configured client.
+        """
+        return await self._ensure_client()
+
     # ── Chat completion ───────────────────────────────────────────────────
     async def chat(
         self,

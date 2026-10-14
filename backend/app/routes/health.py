@@ -30,6 +30,8 @@ class HealthResponse(BaseModel):
 class ReadinessResponse(BaseModel):
     status: str
     checks: dict
+    vector_count: int = 0
+    index_sources: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -61,24 +63,34 @@ async def readiness_check():
     from fastapi.responses import JSONResponse
 
     checks: dict[str, str] = {}
+    vector_count = 0
+    index_sources: list[str] = []
 
     # ── FAISS vector store ────────────────────────────────────────────────
     try:
         from app.vectorstore.faiss_store import faiss_store
-        checks["faiss"] = "ok" if faiss_store.is_ready() else "not_initialised"
+        vector_count = faiss_store.total_vectors
+        checks["faiss"] = "ok" if vector_count > 0 else "not_initialised"
+        if vector_count > 0:
+            index_sources = faiss_store.sources
     except Exception as e:
         checks["faiss"] = f"error: {e}"
 
     # ── Upload directory ──────────────────────────────────────────────────
     checks["upload_dir"] = "ok" if settings.UPLOAD_DIR.exists() else "missing"
 
-    # ── OpenAI API key present (not validated, just presence check) ───────
-    checks["openai_key"] = "configured" if settings.OPENAI_API_KEY else "missing"
+    # ── Active provider API key present (not validated, just presence) ────
+    checks["api_key"] = "configured" if settings.get_active_api_key() else "missing"
 
     overall = "ok" if all(v in ("ok", "configured", "not_initialised") for v in checks.values()) else "degraded"
     status_code = 200 if overall == "ok" else 503
 
     return JSONResponse(
         status_code=status_code,
-        content=ReadinessResponse(status=overall, checks=checks).model_dump(),
+        content=ReadinessResponse(
+            status=overall,
+            checks=checks,
+            vector_count=vector_count,
+            index_sources=index_sources,
+        ).model_dump(),
     )

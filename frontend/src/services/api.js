@@ -41,10 +41,21 @@ export const uploadMedia = async (file) => {
   return response.data;
 };
 
+// Stable per-browser session id so the backend can replay conversation history
+const getSessionId = () => {
+  let sessionId = localStorage.getItem('novara_session_id');
+  if (!sessionId) {
+    sessionId = `web_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem('novara_session_id', sessionId);
+  }
+  return sessionId;
+};
+
 export const sendChat = async (question) => {
   const response = await api.post('/chat', {
     question,
-    top_k: 5
+    top_k: 5,
+    session_id: getSessionId(),
   });
   return response.data;
 };

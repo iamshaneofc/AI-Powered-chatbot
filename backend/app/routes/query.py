@@ -57,9 +57,10 @@ async def chat_endpoint(req: ChatRequest):
         
         # Run RAG pipeline
         result = await rag_service.answer(
-            question=req.question, 
+            question=req.question,
             top_k=req.top_k,
-            filename_filter=req.filename
+            filename_filter=req.filename,
+            session_id=req.session_id,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

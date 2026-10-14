@@ -23,7 +23,7 @@ def test_query_requires_question():
 
 
 def test_query_question_too_short():
-    response = client.post("/api/v1/chat", json={"question": "ab"})
+    response = client.post("/api/v1/chat", json={"question": ""})
     assert response.status_code == 422
 
 
@@ -42,6 +42,24 @@ def test_query_success(mock_answer):
     assert data["answer"] == "Machine learning is a subset of AI."
     assert "sources" in data
     assert "timestamp" in data
+
+
+@patch("app.services.rag_service.RAGService.answer", new_callable=AsyncMock)
+def test_query_forwards_session_id(mock_answer):
+    """The client session id must reach the RAG pipeline so history is used."""
+    mock_answer.return_value = {
+        "answer":  "Because of the resume.",
+        "sources": [],
+        "model":   "gpt-4o",
+        "chunks":  [],
+    }
+
+    response = client.post(
+        "/api/v1/chat",
+        json={"question": "tell me about the guy", "session_id": "sess-abc"},
+    )
+    assert response.status_code == 200
+    assert mock_answer.call_args.kwargs["session_id"] == "sess-abc"
 
 
 # ---------------------------------------------------------------------------

@@ -75,3 +75,77 @@ def test_faiss_properties():
     store._texts = ["test"]
     assert store.docstore == ["test"]
     assert store.index_to_docstore_id == {0: 0}
+
+
+# ---------------------------------------------------------------------------
+# Cross-process (multi-worker) consistency
+# ---------------------------------------------------------------------------
+def _index_kb(path, texts, metadatas, vector=(1.0, 0.0, 0.0, 0.0)):
+    """Create a small FAISS index on disk, as if another worker had saved it."""
+    writer = FAISSStore()
+    with patch("app.vectorstore.faiss_store._INDEX_FILE", path / "kb.index"), \
+         patch("app.vectorstore.faiss_store._DOCSTORE_FILE", path / "kb.json"):
+        writer.add(vectors=[list(vector)], texts=texts, metadatas=metadatas)
+        writer.save()
+    return writer
+
+
+def test_search_reloads_index_written_by_another_worker(tmp_path):
+    """A worker that started with an empty index must pick up another worker's save."""
+    _index_kb(tmp_path, ["hello world"], [{"source": "a.pdf"}])
+
+    with patch("app.vectorstore.faiss_store._INDEX_FILE", tmp_path / "kb.index"), \
+         patch("app.vectorstore.faiss_store._DOCSTORE_FILE", tmp_path / "kb.json"):
+        reader = FAISSStore()
+        assert reader._index is None          # no in-memory snapshot yet
+
+        results = reader.search([1.0, 0.0, 0.0, 0.0])
+        assert len(results) == 1
+        assert results[0]["metadata"]["source"] == "a.pdf"
+        assert reader.is_ready()
+        assert reader.sources == ["a.pdf"]
+        assert reader.total_vectors == 1
+
+
+def test_search_sees_index_cleared_by_another_worker(tmp_path):
+    """A clear() in one worker must not leave ghost chunks in another."""
+    writer = _index_kb(tmp_path, ["hello world"], [{"source": "a.pdf"}])
+
+    with patch("app.vectorstore.faiss_store._INDEX_FILE", tmp_path / "kb.index"), \
+         patch("app.vectorstore.faiss_store._DOCSTORE_FILE", tmp_path / "kb.json"):
+        reader = FAISSStore()
+        assert reader.search([1.0, 0.0, 0.0, 0.0])
+        assert reader.is_ready()
+
+        writer.clear()                        # another worker resets the KB
+
+        assert reader.is_ready() is False
+        assert reader.search([1.0, 0.0, 0.0, 0.0]) == []
+        assert reader.sources == []
+
+
+def test_load_missing_file_resets_stale_state(tmp_path):
+    """Loading after the index file vanished must drop stale in-memory data."""
+    store = FAISSStore()
+    store._index = MagicMock()
+    store._index.ntotal = 5
+    store._texts = ["stale"]
+
+    with patch("app.vectorstore.faiss_store._INDEX_FILE", tmp_path / "gone.index"):
+        store.load()
+        assert store._index is None
+        assert store.total_vectors == 0
+
+
+def test_save_is_visible_to_second_store(tmp_path):
+    """save() then a fresh store.load() must reproduce the docstore."""
+    with patch("app.vectorstore.faiss_store._INDEX_FILE", tmp_path / "kb.index"), \
+         patch("app.vectorstore.faiss_store._DOCSTORE_FILE", tmp_path / "kb.json"):
+        writer = FAISSStore()
+        writer.add(vectors=[[1.0, 0.0, 0.0, 0.0]], texts=["chunk a"], metadatas=[{"source": "doc.pdf", "chunk_index": 0}])
+        writer.save()
+
+        reader = FAISSStore()
+        reader.load()
+        assert reader.total_vectors == 1
+        assert reader.get_document_text("doc.pdf") == ["chunk a"]

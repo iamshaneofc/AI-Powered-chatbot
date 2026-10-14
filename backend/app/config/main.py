@@ -13,6 +13,13 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Backend package root (…/backend) — keeps storage paths independent of the
+# process working directory, so `uvicorn app.main:app` behaves the same
+# whether it is started from the repo root, backend/ or an IDE.
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = BACKEND_ROOT / "data"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -83,13 +90,13 @@ class Settings(BaseSettings):
     WHISPER_MODEL: str = "base"              # tiny | base | small | medium | large
 
     # ── FAISS / Vector store ──────────────────────────────────────────────
-    FAISS_INDEX_PATH: str = "/tmp/vectorstore/index"
+    FAISS_INDEX_PATH: str = str(DATA_DIR / "vectorstore" / "index")
     VECTOR_CHUNK_SIZE: int = 512
     VECTOR_CHUNK_OVERLAP: int = 64
     VECTOR_TOP_K: int = 5
 
     # ── File upload ───────────────────────────────────────────────────────
-    UPLOAD_DIR: Path = Path("/tmp/uploads")
+    UPLOAD_DIR: Path = DATA_DIR / "uploads"
     MAX_UPLOAD_SIZE_MB: int = 50             # enforced in file_utils
     ALLOWED_EXTENSIONS: Any = [
         "pdf", "txt", "docx",               # documents

@@ -43,26 +43,59 @@ class FileListResponse(BaseModel):
 def _ext(filename: str) -> str:
     return Path(filename).suffix.lstrip(".").lower()
 
-async def _reset_state_before_upload(session_id: str = "default_session"):
-    """Clear FAISS, previous uploads, and chat history before a new upload."""
+async def _reset_state_before_upload(keep: Path | None = None):
+    """
+    Clear FAISS, previous uploads, and chat history before a new upload.
+
+    MUST only be called once the new document has been extracted, chunked and
+    embedded successfully — otherwise a failed upload would leave the user
+    with an empty knowledge base.
+
+    Args:
+        keep: file to preserve in the upload dir (the freshly saved document).
+    """
     from app.vectorstore.faiss_store import faiss_store
     from app.services.redis_service import redis_service
     import shutil
-    
+
     faiss_store.clear()
-    
+
     upload_path = Path(settings.UPLOAD_DIR)
     if upload_path.exists():
+        keep_resolved = keep.resolve() if keep else None
         for item in upload_path.iterdir():
             try:
+                if keep_resolved is not None and item.resolve() == keep_resolved:
+                    continue
                 if item.is_file():
                     item.unlink()
                 elif item.is_dir():
                     shutil.rmtree(item)
             except Exception as e:
                 logger.warning("Could not delete old file %s: %s", item, e)
-                
-    await redis_service.clear_history(session_id)
+
+    await redis_service.clear_all_history()
+
+
+async def _embed_text(text: str) -> tuple[list[str], list[list[float]]]:
+    """Chunk + embed text. Raises before any state is destroyed on failure."""
+    from app.utils.text_chunker import chunk_text
+    from app.services.openai_service import openai_service
+
+    chunks = chunk_text(text, chunk_size=settings.VECTOR_CHUNK_SIZE, overlap=settings.VECTOR_CHUNK_OVERLAP)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="No text could be extracted from the document.")
+    vectors = await openai_service.embed_batch(chunks)
+    return chunks, vectors
+
+
+def _discard_file(path: Path | None) -> None:
+    """Best-effort cleanup of a file saved during a failed upload."""
+    try:
+        if path and path.exists():
+            path.unlink()
+    except Exception as e:
+        logger.warning("Could not clean up %s: %s", path, e)
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -89,10 +122,8 @@ async def upload_pdf(
             detail=f"Expected a document file ({DOCUMENT_EXTS}), got '{file.filename}'.",
         )
 
+    saved_path: Path | None = None
     try:
-        # 0. Reset state so AI only focuses on the new file
-        await _reset_state_before_upload()
-
         # 1. Save uploaded file in uploads/
         validate_file(file)
         saved_path = await save_upload(file)
@@ -103,24 +134,23 @@ async def upload_pdf(
         if not text.strip():
             raise HTTPException(status_code=400, detail="No text could be extracted from the document.")
 
-        # 3. Implement text chunking utility
-        from app.utils.text_chunker import chunk_text
-        chunks = chunk_text(text, chunk_size=settings.VECTOR_CHUNK_SIZE, overlap=settings.VECTOR_CHUNK_OVERLAP)
+        # 3. Chunk + embed BEFORE touching the existing knowledge base, so a
+        #    failure here leaves the previous document queryable.
+        chunks, vectors = await _embed_text(text)
 
-        # 4. Generate embeddings using OpenAI service
-        from app.services.openai_service import openai_service
-        vectors = await openai_service.embed_batch(chunks)
+        # 4. New document is ready — now swap the knowledge base
+        await _reset_state_before_upload(keep=saved_path)
 
         # 5. Store embeddings in FAISS
         from app.vectorstore.faiss_store import faiss_store
-        
+
         # Build metadata for each chunk
         doc_metadata = {"source": file.filename, "size_kb": round(saved_path.stat().st_size / 1024, 2)}
         metadatas = [
             {**doc_metadata, "chunk_index": i, "chunk_total": len(chunks)}
             for i in range(len(chunks))
         ]
-        
+
         faiss_store.add(vectors=vectors, texts=chunks, metadatas=metadatas)
         faiss_store.save()
 
@@ -132,8 +162,10 @@ async def upload_pdf(
             metadata=doc_metadata
         )
     except HTTPException:
+        _discard_file(saved_path)
         raise
     except Exception as e:
+        _discard_file(saved_path)
         logger.error("Failed to process PDF %s: %s", file.filename, str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
 
@@ -153,12 +185,11 @@ async def upload_document(
             detail=f"Expected a document file ({DOCUMENT_EXTS}), got '{file.filename}'.",
         )
 
-    # 0. Reset state so AI only focuses on the new file
-    await _reset_state_before_upload()
-
     validate_file(file)
     saved_path = await save_upload(file)
 
+    # State is only reset inside the background task, after the new document
+    # has been extracted and embedded successfully.
     background_tasks.add_task(_index_document, saved_path)
 
     return UploadResponse(
@@ -191,10 +222,8 @@ async def upload_media(
             detail=f"Expected a media file ({MEDIA_EXTS}), got '{file.filename}'.",
         )
 
+    saved_path: Path | None = None
     try:
-        # 0. Reset state so AI only focuses on the new file
-        await _reset_state_before_upload()
-
         validate_file(file)
         saved_path = await save_upload(file)
 
@@ -208,15 +237,18 @@ async def upload_media(
         transcript = meta.get("text", "")
         if not transcript.strip():
              raise HTTPException(status_code=400, detail="Empty transcript returned.")
-             
+
         # 2. Chunk transcript preserving timestamps
         chunks_data = chunk_transcript(meta.get("segments", []), chunk_size=settings.VECTOR_CHUNK_SIZE)
         texts = [c["text"] for c in chunks_data]
 
-        # 3. Generate embeddings
+        # 3. Generate embeddings BEFORE destroying the existing knowledge base
         vectors = await openai_service.embed_batch(texts)
 
-        # 4. Store in FAISS with metadata
+        # 4. New transcript is ready — swap the knowledge base
+        await _reset_state_before_upload(keep=saved_path)
+
+        # 5. Store in FAISS with metadata
         doc_metadata = {"source": file.filename, "size_kb": round(saved_path.stat().st_size / 1024, 2), "type": "transcript"}
         metadatas = [
             {
@@ -228,7 +260,7 @@ async def upload_media(
             }
             for i, c in enumerate(chunks_data)
         ]
-        
+
         faiss_store.add(vectors=vectors, texts=texts, metadatas=metadatas)
         faiss_store.save()
 
@@ -243,8 +275,10 @@ async def upload_media(
             timestamps=timestamps
         )
     except HTTPException:
+        _discard_file(saved_path)
         raise
     except Exception as e:
+        _discard_file(saved_path)
         logger.error("Failed to process media %s: %s", file.filename, str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to process media: {str(e)}")
 
@@ -271,17 +305,31 @@ async def delete_file(filename: str):
 # Background tasks
 # ---------------------------------------------------------------------------
 async def _index_document(path: Path) -> None:
-    """Extract text → chunk → embed → add to FAISS."""
+    """Extract text → chunk → embed → swap FAISS with the new document."""
     try:
-        from app.services.vector_service import vector_service
+        from app.vectorstore.faiss_store import faiss_store
+
         text = extract_text(path)
-        if text.strip():
-            await vector_service.add_text(text, metadata={"source": path.name})
-            logger.info("Indexed document: %s", path.name)
-        else:
+        if not text.strip():
             logger.warning("No text extracted from %s", path.name)
+            _discard_file(path)
+            return
+
+        chunks, vectors = await _embed_text(text)
+
+        # Only now is it safe to drop the previous document
+        await _reset_state_before_upload(keep=path)
+
+        metadatas = [
+            {"source": path.name, "chunk_index": i, "chunk_total": len(chunks)}
+            for i in range(len(chunks))
+        ]
+        faiss_store.add(vectors=vectors, texts=chunks, metadatas=metadatas)
+        faiss_store.save()
+        logger.info("Indexed document: %s", path.name)
     except Exception as exc:
         logger.error("Failed to index %s: %s", path.name, exc, exc_info=True)
+        _discard_file(path)
 
 
 async def _transcribe_and_index(path: Path) -> None:

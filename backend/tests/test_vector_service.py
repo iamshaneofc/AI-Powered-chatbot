@@ -19,7 +19,7 @@ def test_chunk_text():
     assert chunks[3] == "A" * 10
 
 @pytest.mark.asyncio
-async def test_add_text():
+async def test_add_text(mock_openai):
     """Test inserting text, ensuring it gets chunked and sent to FAISS correctly."""
     with patch("app.vectorstore.faiss_store.faiss_store.add") as mock_faiss_add, \
          patch("app.vectorstore.faiss_store.faiss_store.save") as mock_faiss_save:
@@ -42,7 +42,7 @@ async def test_add_text():
         assert "chunk_index" in metadatas[0]
 
 @pytest.mark.asyncio
-async def test_search():
+async def test_search(mock_openai):
     """Test semantic search hitting the FAISS store."""
     with patch("app.vectorstore.faiss_store.faiss_store.search") as mock_faiss_search:
         mock_faiss_search.return_value = [{"text": "Result 1", "score": 0.99, "metadata": {}}]

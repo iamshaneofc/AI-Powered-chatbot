@@ -46,10 +46,12 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code
 COPY app/ ./app/
 
-# No longer creating app/uploads or app/vectorstore since we use /tmp
+# Writable storage for the FAISS index + uploads (default paths in config)
+RUN mkdir -p /app/data
 
 # Non-root user for security
-RUN useradd --no-create-home --shell /bin/false appuser
+RUN useradd --no-create-home --shell /bin/false appuser \
+    && chown -R appuser:appuser /app/data
 USER appuser
 
 # Expose API port
@@ -60,8 +62,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
 
 # Start server
+# Single worker: the FAISS store is also kept in sync across processes via
+# mtime-based reloading (see app/vectorstore/faiss_store.py), but one worker
+# keeps memory usage predictable on small instances.
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
-     "--workers", "2", \
+     "--workers", "1", \
      "--no-access-log"]
